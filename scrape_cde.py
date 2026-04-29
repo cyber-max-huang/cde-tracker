@@ -21,6 +21,10 @@ import time
 from pathlib import Path
 from typing import Optional
 
+from openpyxl import Workbook
+from openpyxl.styles import Alignment, Border, Font, PatternFill, Side
+from openpyxl.utils import get_column_letter
+
 from selenium import webdriver
 from selenium.webdriver.chrome.options import Options
 from selenium.webdriver.chrome.service import Service
@@ -35,6 +39,7 @@ URL = "https://www.cde.org.cn/main/xxgk/listpage/9f9c74c73e0f8f56a8bfbc646055026
 # 输出文件路径（相对于脚本所在目录）
 SCRIPT_DIR = Path(__file__).resolve().parent
 OUTPUT_PATH = SCRIPT_DIR / "cde_data.json"
+OUTPUT_XLSX_PATH = SCRIPT_DIR / "cde_data.xlsx"
 
 # 等待超时（秒）
 WAF_WAIT_SECONDS = 30   # WAF JS 挑战最大等待时间
@@ -137,6 +142,65 @@ def extract_table_data(driver: webdriver.Chrome) -> list[dict]:
     """)
 
 
+# ── Excel 导出 ──────────────────────────────────────────────────
+
+def export_to_excel(records: list[dict], output_path: Path) -> None:
+    """将记录导出为格式清晰的 Excel 表格。"""
+    wb = Workbook()
+    ws = wb.active
+    ws.title = "受理品种目录"
+
+    # 样式定义
+    header_font = Font(name="微软雅黑", size=11, bold=True, color="FFFFFF")
+    header_fill = PatternFill(start_color="4472C4", end_color="4472C4", fill_type="solid")
+    header_alignment = Alignment(horizontal="center", vertical="center")
+    cell_font = Font(name="微软雅黑", size=10)
+    cell_alignment = Alignment(vertical="center")
+    thin_border = Border(
+        left=Side(style="thin"),
+        right=Side(style="thin"),
+        top=Side(style="thin"),
+        bottom=Side(style="thin"),
+    )
+
+    # 写表头
+    for col_idx, col_name in enumerate(COLUMNS, 1):
+        cell = ws.cell(row=1, column=col_idx, value=col_name)
+        cell.font = header_font
+        cell.fill = header_fill
+        cell.alignment = header_alignment
+        cell.border = thin_border
+
+    # 写数据行
+    for row_idx, record in enumerate(records, 2):
+        for col_idx, col_name in enumerate(COLUMNS, 1):
+            cell = ws.cell(row=row_idx, column=col_idx, value=record.get(col_name, ""))
+            cell.font = cell_font
+            cell.alignment = cell_alignment
+            cell.border = thin_border
+
+    # 自动调整列宽
+    for col_idx, col_name in enumerate(COLUMNS, 1):
+        # 计算合适的列宽：取表头和数据中最大宽度
+        max_width = len(col_name) * 2  # 中文字符占用约2个英文字符宽度
+        for row_idx in range(2, len(records) + 2):
+            cell_value = ws.cell(row=row_idx, column=col_idx).value or ""
+            cell_width = len(str(cell_value)) * 1.3
+            max_width = max(max_width, cell_width)
+        # 限制最大宽度
+        col_letter = get_column_letter(col_idx)
+        ws.column_dimensions[col_letter].width = min(max_width + 2, 60)
+
+    # 冻结首行
+    ws.freeze_panes = "A2"
+
+    # 设置行高
+    ws.row_dimensions[1].height = 28
+
+    wb.save(output_path)
+    print(f"Excel 表格已保存 → {output_path}")
+
+
 # ── 主流程 ────────────────────────────────────────────────────
 
 def main() -> None:
@@ -211,6 +275,9 @@ def main() -> None:
             json.dump(records, f, ensure_ascii=False, indent=2)
 
         print(f"成功提取 {len(records)} 条记录 → {OUTPUT_PATH}")
+
+        # Excel 导出
+        export_to_excel(records, OUTPUT_XLSX_PATH)
 
         # ── 步骤 6: 打印结果 ──
         widths = [4, 16, 30, 16, 12, 8, 40, 12]

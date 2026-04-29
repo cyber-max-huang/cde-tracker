@@ -12,7 +12,9 @@
       "Read(//private/tmp/**)",
       "Read(//Users/xiaohuang/.wdm/**)",
       "Read(//Users/xiaohuang/.cache/**)",
-      "Bash(python3 *)"
+      "Bash(python3 *)",
+      "WebSearch",
+      "Bash(node *)"
     ]
   }
 }
